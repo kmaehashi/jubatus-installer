@@ -116,6 +116,33 @@ makedir() {
     fi
 }
 
+ub_setup_compiler() {
+    _CC_="gcc"
+    _CXX_="clang++"
+    _ARCH_="-arch i386 -arch x86_64"
+
+    case "$1" in
+        waf )
+            export CC="${_CC_}"
+            export CXX="${_CXX_}"
+            export CPP="${_CC_} -E"
+            export CXXCPP="${_CXX_} -E"
+            export CFLAGS="${_ARCH_}"
+            export CXXFLAGS="${_ARCH_}"
+            export LDFLAGS="-L${PREFIX}/lib ${_ARCH_}"
+            ;;
+        * )
+            export CC="${_CC_} ${_ARCH_}"
+            export CXX="${_CXX_} ${_ARCH_}"
+            export CPP="${_CC_} -E"
+            export CXXCPP="${_CXX_} -E"
+            unset CFLAGS
+            unset CXXFLAGS
+            export LDFLAGS="-L${PREFIX}/lib"
+            ;;
+    esac
+}
+
 export INSTALL_LOG=install.`date +%Y%m%d`.`date +%H%M`.log 
 (
 if [ "${INSTALL_ONLY}" != "TRUE" ]
@@ -149,6 +176,7 @@ if [ "${DOWNLOAD_ONLY}" != "TRUE" ]
     check_command make
     check_command tar
     check_command python
+    check_command perl
 
     cd download
 
@@ -177,53 +205,70 @@ if [ "${DOWNLOAD_ONLY}" != "TRUE" ]
     export CPLUS_INCLUDE_PATH="${PREFIX}/include"
 
     cd ./pkg-config-${PKG_VER}
+    ub_setup_compiler gnu
     ./configure --prefix=${PREFIX} && make && make install
     check_result $?
 
     cd ../msgpack-${MSG_VER}
-    ./configure --prefix=${PREFIX} && make && make install
+    ub_setup_compiler gnu
+    ./configure --prefix=${PREFIX} --disable-static && make && make install
     check_result $?
 
     cd ../glog-${GLOG_VER}
-    ./configure --prefix=${PREFIX} && make && make install
+    ub_setup_compiler gnu
+    ./configure --prefix=${PREFIX} --disable-static && make && make install
     check_result $?
 
     cd ../ux-${UX_VER}
+    ub_setup_compiler waf
     ./waf configure --prefix=${PREFIX} && ./waf build && ./waf install
     check_result $?
 
     cd ../mecab-${MECAB_VER}
-    ./configure --prefix=${PREFIX} --enable-utf8-only && make && make install
+    ub_setup_compiler gnu
+    ./configure --prefix=${PREFIX} --disable-static --enable-utf8-only
+    make && make install
     check_result $?
 
     cd ../mecab-ipadic-${IPADIC_VER}
+    ub_setup_compiler gnu
     MECAB_CONFIG="$PREFIX/bin/mecab-config"
     MECAB_DICDIR=`$MECAB_CONFIG --dicdir`
     ./configure --prefix=${PREFIX} --with-mecab-config=$MECAB_CONFIG --with-dicdir=$MECAB_DICDIR/ipadic --with-charset=utf-8 && make && make install
     check_result $?
 
     cd ../re2
-    sed -i -e "s|/usr/local|${PREFIX}/|g" Makefile
+    ub_setup_compiler gnu
+    # workaround: re2 does not have configure command
+    if [ ! -z "${CXX}" ]; then
+        perl -pi -e 's|^(CXX)=(.+)$|$1='"${CXX}"'|g' Makefile
+    fi
+    perl -pi -e 's|^(prefix)=/usr/local$|$1='"${PREFIX}"'|g' Makefile
     make && make install
     check_result $?
 
     cd ../zookeeper-${ZK_VER}/src/c
-    ./configure --prefix=${PREFIX} && make && make install
+    ub_setup_compiler gnu
+    ./configure --prefix=${PREFIX} --disable-static && make && make install
     check_result $?
 
     cd ../../../pficommon-${PFICOMMON_VER}
+    ub_setup_compiler waf
     ./waf configure --prefix=${PREFIX} --with-msgpack=${PREFIX} && ./waf build && ./waf install
     check_result $?
 
     cd ../jubatus_mpio-${JUBATUS_MPIO_VER}
-    ./configure --prefix=${PREFIX} && make && make install
+    ub_setup_compiler gnu
+    ./configure --prefix=${PREFIX} --disable-static && make && make install
     check_result $?
 
     cd ../jubatus_msgpack-rpc-${JUBATUS_MSGPACK_RPC_VER}
-    ./configure --prefix=${PREFIX} && make && make install
+    ub_setup_compiler gnu
+    ./configure --prefix=${PREFIX} --disable-static && make && make install
     check_result $?
 
     cd ../jubatus-${JUBATUS_VER}
+    ub_setup_compiler waf
     ./waf configure --prefix=${PREFIX} --enable-ux --enable-mecab --enable-zookeeper && ./waf build --checkall && ./waf install
     check_result $?
 
